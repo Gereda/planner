@@ -88,12 +88,27 @@ func (s *Service) GetTasks(ctx *gin.Context) {
 }
 
 func (s *Service) GetTaskByID(ctx *gin.Context) {
+	ctxt, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
 	taskID := s.getTaskID(ctx)
 	if taskID == -1 {
 		ctx.JSON(http.StatusBadRequest, gin.H{"err": "Invalid ID"})
 		return
 	}
-	ctx.JSON(http.StatusOK, entity.Planner[taskID])
+	rows, err := s.db.QueryContext(ctxt, "SELECT * FROM planner WHERE ID = ?", taskID)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"err": err.Error()})
+		return
+	}
+
+	var t entity.Task
+	err = rows.Scan(&t.ID, &t.Title, &t.Description, &t.Status, &t.Priority)
+	if err != nil {
+		return
+	}
+
+	ctx.JSON(http.StatusOK, t)
 }
 
 func (s *Service) getTaskID(ctx *gin.Context) int {
