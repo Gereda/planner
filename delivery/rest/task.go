@@ -1,11 +1,13 @@
 package rest
 
 import (
+	"context"
 	"database/sql"
 	"github.com/gin-gonic/gin"
 	"net/http"
 	"planner/entity"
 	"strconv"
+	"time"
 )
 
 type Service struct {
@@ -19,6 +21,9 @@ func NewService(db *sql.DB) *Service {
 
 }
 func (s *Service) CreateTasks(ctx *gin.Context) {
+	//ctxt, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	//defer cancel()
+
 	var task entity.Task
 	err := ctx.BindJSON(&task)
 	if err != nil {
@@ -37,11 +42,14 @@ func (s *Service) CreateTasks(ctx *gin.Context) {
 }
 
 func (s *Service) GetTasks(ctx *gin.Context) {
+	ctxt, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
 	ctx.Header("Cache-Control", "public, max-age=3600")
 	getStatus := ctx.Query("status")
 	status, err := strconv.ParseBool(getStatus)
 	if err != nil {
-		rows, err := s.db.Query("SELECT * FROM planner")
+		rows, err := s.db.QueryContext(ctxt, "SELECT * FROM planner")
 		if err != nil {
 			return
 		}
@@ -79,20 +87,20 @@ func (s *Service) GetTasks(ctx *gin.Context) {
 	ctx.JSONP(http.StatusOK, sl)
 }
 
-func GetTaskByID(c *gin.Context) {
-	taskID := getTaskID(c)
+func (s *Service) GetTaskByID(ctx *gin.Context) {
+	taskID := s.getTaskID(ctx)
 	if taskID == -1 {
-		c.JSON(http.StatusBadRequest, gin.H{"err": "Invalid ID"})
+		ctx.JSON(http.StatusBadRequest, gin.H{"err": "Invalid ID"})
 		return
 	}
-	c.JSON(http.StatusOK, entity.Planner[taskID])
+	ctx.JSON(http.StatusOK, entity.Planner[taskID])
 }
 
-func getTaskID(c *gin.Context) int {
-	taskIDStr := c.Param("id")
+func (s *Service) getTaskID(ctx *gin.Context) int {
+	taskIDStr := ctx.Param("id")
 	taskID, err := strconv.Atoi(taskIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
 		return -1
 	}
 
@@ -100,6 +108,9 @@ func getTaskID(c *gin.Context) int {
 }
 
 func (s *Service) UpdateTasks(ctx *gin.Context) {
+	ctxt, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
 	key := ctx.Param("id")
 	ID, err := strconv.Atoi(key)
 	if err != nil {
@@ -112,18 +123,21 @@ func (s *Service) UpdateTasks(ctx *gin.Context) {
 		ctx.JSONP(http.StatusBadRequest, err)
 		return
 	}
-	_, err = s.db.Exec("UPDATE planner SET title = ?, description = ?, status = ?, priority = ? WHERE ID = ?", task.Title, task.Description, task.Status, task.Priority, ID)
+	_, err = s.db.ExecContext(ctxt, "UPDATE planner SET title = ?, description = ?, status = ?, priority = ? WHERE ID = ?", task.Title, task.Description, task.Status, task.Priority, ID)
 	ctx.JSON(http.StatusOK, gin.H{"Статус": "изменения сохранены"})
 }
 
 func (s *Service) DelTask(ctx *gin.Context) {
+	ctxt, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
 	key := ctx.Param("id")
 	num, err := strconv.Atoi(key)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Неправильный индекс"})
 		return
 	}
-	result, err := s.db.Exec("DELETE FROM planner WHERE ID = ?", num)
+	result, err := s.db.ExecContext(ctxt, "DELETE FROM planner WHERE ID = ?", num)
 	i, err := result.RowsAffected()
 	if i == 0 {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Задача не найдена"})
