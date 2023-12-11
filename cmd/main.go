@@ -10,7 +10,9 @@ import (
 
 func main() {
 	db := db.InitDB()
+
 	service := rest.NewService(db)
+
 	defer db.Close()
 
 	r := gin.Default()
