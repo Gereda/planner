@@ -21,8 +21,8 @@ func NewService(db *sql.DB) *Service {
 
 }
 func (s *Service) CreateTasks(ctx *gin.Context) {
-	//ctxt, cancel := context.WithTimeout(context.Background(), time.Second*10)
-	//defer cancel()
+	ctxt, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
 
 	var task entity.Task
 	err := ctx.BindJSON(&task)
@@ -31,7 +31,7 @@ func (s *Service) CreateTasks(ctx *gin.Context) {
 		return
 	}
 	var ID int
-	err = s.db.QueryRow("INSERT INTO planner (title, description, status, priority) VALUES (?, ?, ?, ?) RETURNING ID",
+	err = s.db.QueryRowContext(ctxt, "INSERT INTO planner (title, description, status, priority) VALUES (?, ?, ?, ?) RETURNING ID",
 		task.Title, task.Description, task.Status, task.Priority).Scan(&ID)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"err": err.Error()})
