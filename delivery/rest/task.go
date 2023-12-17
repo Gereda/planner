@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"github.com/gin-gonic/gin"
 	"net/http"
+	"planner/db"
 	"planner/entity"
 	"strconv"
 	"time"
@@ -31,8 +32,9 @@ func (s *Service) CreateTasks(ctx *gin.Context) {
 		return
 	}
 	var ID int
-	err = s.db.QueryRowContext(ctxt, "INSERT INTO planner (title, description, status, priority) VALUES (?, ?, ?, ?) RETURNING ID",
-		task.Title, task.Description, task.Status, task.Priority).Scan(&ID)
+	err = db.Insert.QueryRowContext(ctxt, task.Title, task.Description, task.Status, task.Priority).Scan(&ID)
+	//err = s.db.QueryRowContext(ctxt, "INSERT INTO planner (title, description, status, priority) VALUES ($1, $2, $3, $4) RETURNING ID",
+	//	task.Title, task.Description, task.Status, task.Priority).Scan(&ID)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"err": err.Error()})
 		return
@@ -62,7 +64,7 @@ func (s *Service) GetTasks(ctx *gin.Context) {
 		ctx.JSONP(http.StatusOK, sl)
 		return
 	}
-	rows, err := s.db.Query("SELECT * FROM planner WHERE status = ?", status)
+	rows, err := s.db.Query("SELECT * FROM planner WHERE status = $1", status)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"err": err.Error()})
 		return
@@ -96,15 +98,10 @@ func (s *Service) GetTaskByID(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, gin.H{"err": "Invalid ID"})
 		return
 	}
-	rows, err := s.db.QueryContext(ctxt, "SELECT * FROM planner WHERE ID = ?", taskID)
+	var t entity.Task
+	err := s.db.QueryRowContext(ctxt, "SELECT * FROM planner WHERE ID = $1", taskID).Scan(&t.ID, &t.Title, &t.Description, &t.Status, &t.Priority)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{"err": err.Error()})
-		return
-	}
-
-	var t entity.Task
-	err = rows.Scan(&t.ID, &t.Title, &t.Description, &t.Status, &t.Priority)
-	if err != nil {
 		return
 	}
 
@@ -138,7 +135,7 @@ func (s *Service) UpdateTasks(ctx *gin.Context) {
 		ctx.JSONP(http.StatusBadRequest, err)
 		return
 	}
-	_, err = s.db.ExecContext(ctxt, "UPDATE planner SET title = ?, description = ?, status = ?, priority = ? WHERE ID = ?", task.Title, task.Description, task.Status, task.Priority, ID)
+	_, err = s.db.ExecContext(ctxt, "UPDATE planner SET title = $1, description = $2, status = $3, priority = $4 WHERE ID = $5", task.Title, task.Description, task.Status, task.Priority, ID)
 	ctx.JSON(http.StatusOK, gin.H{"Статус": "изменения сохранены"})
 }
 
@@ -152,7 +149,7 @@ func (s *Service) DelTask(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Неправильный индекс"})
 		return
 	}
-	result, err := s.db.ExecContext(ctxt, "DELETE FROM planner WHERE ID = ?", num)
+	result, err := s.db.ExecContext(ctxt, "DELETE FROM planner WHERE ID = $1", num)
 	i, err := result.RowsAffected()
 	if i == 0 {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Задача не найдена"})
